@@ -1,32 +1,25 @@
-#![recursion_limit="512"]
-#[macro_use]
-extern crate diesel;
-extern crate dotenv;
+extern crate service_rust;
 
-use diesel::prelude::*;
-use diesel::pg::PgConnection;
+use actix_web::{web, App, HttpServer};
 use dotenv::dotenv;
-use std::env;
 
-mod models;
-mod schema;
+use planets_service::persistence::connection::create_connection_pool;
+use planets_service::{configure_service, create_schema_with_context, run_migrations};
 
-use models::Event;
-use schema::event::dsl::*;
-
-fn main() {
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
     dotenv().ok();
-    let data_url = env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set");
-    let connection = &mut PgConnection::establish(&data_url)
-        .expect(&format!("Error connect to {}", data_url));
+    let pool = create_connection_pool();
+    run_migrations(&mut pool.get().expect("Can't get DB connection"));
 
-    let results = event.limit(2)
-        .load::<Event>(connection)
-        .expect("Error loading events");
+    let schema = web::Data::new(create_schema_with_context(pool));
 
-    // for events in results {
-    //     print!("{} \n", event.id);
-    // }
+    HttpServer::new(move || {
+        App::new()
+            .configure(configure_service)
+            .app_data(schema.clone())
+    })
+    .bind("0.0.0.0:8001")?
+    .run()
+    .await
 }
-

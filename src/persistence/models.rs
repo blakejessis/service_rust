@@ -61,3 +61,58 @@ pub struct Start {
     pub idevent: Option<i32>,
 }
 
+
+#[derive(Insertable)]
+#[diesel(table_name = event)]
+pub struct NewEvent {
+    pub summary: String,
+    pub location: String,
+    pub description: Option<String>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = attendes)]
+pub struct NewAttende {
+    pub email: String,
+    pub idevent: Option<i32>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = endl)]
+pub struct NewEndl {
+    pub datetime: NaiveDateTime,
+    pub timezone: String,
+    pub idevent: Option<i32>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = overrides)]
+pub struct NewOverride {
+    pub method: String,
+    pub minutes: i32,
+    pub idreminders: Option<i32>,
+    pub idevent: Option<i32>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = reccurence)]
+pub struct NewRecurrence {
+    pub rrule: String,
+    pub idevent: Option<i32>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = reminders)]
+pub struct NewReminder {
+    pub usedefault: bool,
+    pub idevent: Option<i32>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = start)]
+pub struct NewStart {
+    pub datetime: NaiveDateTime,
+    pub timezone: String,
+    pub idevent: Option<i32>,
+}
+
