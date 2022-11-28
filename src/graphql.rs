@@ -19,7 +19,7 @@ use crate::get_conn_from_ctx;
 use crate::kafka;
 use crate::persistence::connection::PgPool;
 use crate::persistence::models::{Attende,
-    Endl, Event, Override, Recurrence,
+    Endl, Events, Override, Recurrence,
     Reminder, Start, NewAttende, NewEndl,
     NewEvent, NewOverride, NewRecurrence,
     NewReminder, NewStart
@@ -32,32 +32,32 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    async fn get_planets(&self, ctx: &Context<'_>) -> Vec<Planet> {
+    async fn get_events(&self, ctx: &Context<'_>) -> Vec<Events> {
         repository::get_all(&mut get_conn_from_ctx(ctx))
-            .expect("Can't get planets")
+            .expect("Can't get events")
             .iter()
-            .map(Planet::from)
+            .map(Events::from)
             .collect()
     }
 
-    async fn get_planet(&self, ctx: &Context<'_>, id: ID) -> Option<Planet> {
-        find_planet_by_id_internal(ctx, id)
+    async fn get_event(&self, ctx: &Context<'_>, id: ID) -> Option<Events> {
+        find_event_by_id_internal(ctx, id)
     }
 
     #[graphql(entity)]
-    async fn find_planet_by_id(&self, ctx: &Context<'_>, id: ID) -> Option<Planet> {
-        find_planet_by_id_internal(ctx, id)
+    async fn find_event_by_id(&self, ctx: &Context<'_>, id: ID) -> Option<Events> {
+        find_event_by_id_internal(ctx, id)
     }
 }
 
-fn find_planet_by_id_internal(ctx: &Context<'_>, id: ID) -> Option<Planet> {
+fn find_event_by_id_internal(ctx: &Context<'_>, id: ID) -> Option<Events> {
     let id = id
         .to_string()
         .parse::<i32>()
         .expect("Can't get id from String");
     repository::get(id, &mut get_conn_from_ctx(ctx))
         .ok()
-        .map(|p| Planet::from(&p))
+        .map(|p| Events::from(&p))
 }
 
 pub struct Mutation;
@@ -65,32 +65,66 @@ pub struct Mutation;
 #[Object]
 impl Mutation {
     #[graphql(guard = "RoleGuard::new(Role::Admin)")]
-    async fn create_planet(&self, ctx: &Context<'_>, planet: PlanetInput) -> Result<Planet> {
-        let new_planet = NewPlanetEntity {
-            name: planet.name,
-            type_: planet.type_.to_string(),
+    async fn create_event(&self, ctx: &Context<'_>, event: EventInput) -> Result<Event> {
+        let new_event = NewEvent {
+            summary: event.summary,
+            location: event.location,
+            description: event.description,
         };
 
-        let details = planet.details;
-        let new_planet_details = NewDetailsEntity {
-            mean_radius: details.mean_radius.0,
-            mass: BigDecimal::from_str(&details.mass.0.to_string())
-                .expect("Can't get BigDecimal from string"),
-            population: details.population.map(|wrapper| wrapper.0),
-            planet_id: 0,
+        let attendes = event.attendes;
+        let new_event_attendes = NewAttende {
+            email: attendes.email,
+            idevent: 0,
         };
 
-        let created_planet_entity =
-            repository::create(new_planet, new_planet_details, &mut get_conn_from_ctx(ctx))?;
+        let endl = event.endl;
+        let new_event_endl = NewEndl {
+            datetime: endl.datetime.to_string(),
+            timezone: endl.timezone.to_string(),
+            idevent: 0,
+        };
+        
+        let overrides = event.overrides;
+        let new_event_overrides = NewOverride {
+            method: overrides.method.to_string(),
+            minutes: overrides.minutes.to_string(),
+            idreminders: 0,
+            idevent: 0,
+        };
+
+        let recurrence = event.recurrence;
+        let new_event_recurrence = NewRecurrence {
+            rrule: recurrence.rrule,
+            idevent: 0,
+        };
+
+        let reminders = event.reminders;
+        let new_event_reminders = NewReminder {
+            usedefault: reminders.usedefault.to_string(),
+            idevent: 0,
+        };
+
+        let start = event.start;
+        let new_event_start = NewStart {
+            datetime: start.datetime.to_string(),
+            timezone: start.timezone.to_string(),
+            idevent: 0,
+        };
+
+        let created_event =
+            repository::create(new_event, new_event_attendes, new_event_endl,
+            new_event_overrides, new_event_recurrence, new_event_reminders,
+            new_event_start, &mut get_conn_from_ctx(ctx))?;
 
         let producer = ctx
             .data::<FutureProducer>()
             .expect("Can't get Kafka producer");
-        let message = serde_json::to_string(&Planet::from(&created_planet_entity))
-            .expect("Can't serialize a planet");
+        let message = serde_json::to_string(&Events::from(&created_event))
+            .expect("Can't serialize a event");
         kafka::send_message(producer, &message).await;
 
-        Ok(Planet::from(&created_planet_entity))
+        Ok(Events::from(&created_event))
     }
 }
 
@@ -98,10 +132,10 @@ pub struct Subscription;
 
 #[Subscription]
 impl Subscription {
-    async fn latest_planet<'ctx>(
+    async fn latest_event<'ctx>(
         &self,
         ctx: &'ctx Context<'_>,
-    ) -> impl Stream<Item = Planet> + 'ctx {
+    ) -> impl Stream<Item = NewEvent> + 'ctx {
         let kafka_consumer_counter = ctx
             .data::<Mutex<i32>>()
             .expect("Can't get Kafka consumer counter");
@@ -119,7 +153,7 @@ impl Subscription {
                     Ok(message) => {
                         let payload = message.payload().expect("Kafka message should contain payload");
                         let message = String::from_utf8_lossy(payload).to_string();
-                        serde_json::from_str(&message).expect("Can't deserialize a planet")
+                        serde_json::from_str(&message).expect("Can't deserialize a event")
                     }
                     Err(e) => panic!("Error while Kafka message processing: {}", e)
                 };
@@ -129,233 +163,294 @@ impl Subscription {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Planet {
+struct Event {
     id: ID,
-    name: String,
-    type_: PlanetType,
+    summary: String,
+    description: String,
 }
 
 #[Object]
-impl Planet {
+impl Event {
     async fn id(&self) -> &ID {
         &self.id
     }
 
-    async fn name(&self) -> &String {
-        &self.name
+    async fn summary(&self) -> &String {
+        &self.summary
     }
 
-    /// From an astronomical point of view
-    #[graphql(name = "type")]
-    async fn type_(&self) -> &PlanetType {
-        &self.type_
+    async fn description(&self) -> &String {
+        &self.description
     }
 
-    #[graphql(deprecation = "Now it is not in doubt. Do not use this field")]
-    async fn is_rotating_around_sun(&self) -> bool {
-        true
-    }
 
-    async fn details(&self, ctx: &Context<'_>) -> Result<Details> {
+    async fn attendes(&self, ctx: &Context<'_>) -> Result<Attende> {
         let data_loader = ctx
-            .data::<DataLoader<DetailsLoader>>()
+            .data::<DataLoader<AttendesLoader>>()
             .expect("Can't get data loader");
-        let planet_id = self
+        let idevent = self
             .id
             .to_string()
             .parse::<i32>()
             .expect("Can't convert id");
-        let details = data_loader.load_one(planet_id).await?;
-        details.ok_or_else(|| "Not found".into())
-    }
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Enum, Display, EnumString)]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-enum PlanetType {
-    TerrestrialPlanet,
-    GasGiant,
-    IceGiant,
-    DwarfPlanet,
-}
-
-#[derive(Interface, Clone)]
-#[graphql(
-    field(name = "mean_radius", type = "&CustomBigDecimal"),
-    field(name = "mass", type = "&CustomBigInt")
-)]
-pub enum Details {
-    InhabitedPlanetDetails(InhabitedPlanetDetails),
-    UninhabitedPlanetDetails(UninhabitedPlanetDetails),
-}
-
-#[derive(SimpleObject, Clone)]
-pub struct InhabitedPlanetDetails {
-    mean_radius: CustomBigDecimal,
-    mass: CustomBigInt,
-    /// In billions
-    population: CustomBigDecimal,
-}
-
-#[derive(SimpleObject, Clone)]
-pub struct UninhabitedPlanetDetails {
-    mean_radius: CustomBigDecimal,
-    mass: CustomBigInt,
-}
-
-#[derive(Clone)]
-pub struct CustomBigInt(BigDecimal);
-
-#[Scalar(name = "BigInt")]
-impl ScalarType for CustomBigInt {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        match value {
-            Value::String(s) => {
-                let parsed_value = BigDecimal::from_str(&s)?;
-                Ok(CustomBigInt(parsed_value))
-            }
-            _ => Err(InputValueError::expected_type(value)),
-        }
+        let attendes = data_loader.load_one(idevent).await?;
+        attendes.ok_or_else(|| "Not found".into())
     }
 
-    fn to_value(&self) -> Value {
-        Value::String(format!("{:e}", &self))
+    async fn endl(&self, ctx: &Context<'_>) -> Result<Endl> {
+        let data_loader = ctx
+            .data::<DataLoader<EndlLoader>>()
+            .expect("Can't get data loader");
+        let idevent = self
+            .id
+            .to_string()
+            .parse::<i32>()
+            .expect("Can't convert id");
+        let endl = data_loader.load_one(idevent).await?;
+        endl.ok_or_else(|| "Not found".into())
     }
+
+    async fn overrides(&self, ctx: &Context<'_>) -> Result<Override> {
+        let data_loader = ctx
+            .data::<DataLoader<OverrideLoader>>()
+            .expect("Can't get data loader");
+        let idevent = self
+            .id
+            .to_string()
+            .parse::<i32>()
+            .expect("Can't convert id");
+        let overrides = data_loader.load_one(idevent).await?;
+        overrides.ok_or_else(|| "Not found".into())
+    }
+
+    async fn recurrence(&self, ctx: &Context<'_>) -> Result<Recurrence> {
+        let data_loader = ctx
+            .data::<DataLoader<RecurrenceLoader>>()
+            .expect("Can't get data loader");
+        let idevent = self
+            .id
+            .to_string()
+            .parse::<i32>()
+            .expect("Can't convert id");
+        let recurrence = data_loader.load_one(idevent).await?;
+        recurrence.ok_or_else(|| "Not found".into())
+    }
+
+    async fn reminders(&self, ctx: &Context<'_>) -> Result<Reminder> {
+        let data_loader = ctx
+            .data::<DataLoader<ReminderLoader>>()
+            .expect("Can't get data loader");
+        let idevent = self
+            .id
+            .to_string()
+            .parse::<i32>()
+            .expect("Can't convert id");
+        let reminders = data_loader.load_one(idevent).await?;
+        reminders.ok_or_else(|| "Not found".into())
+    }
+
+    async fn start(&self, ctx: &Context<'_>) -> Result<Start> {
+        let data_loader = ctx
+            .data::<DataLoader<StartLoader>>()
+            .expect("Can't get data loader");
+        let idevent = self
+            .id
+            .to_string()
+            .parse::<i32>()
+            .expect("Can't convert id");
+        let start = data_loader.load_one(idevent).await?;
+        start.ok_or_else(|| "Not found".into())
+    }
+    
 }
 
-impl LowerExp for CustomBigInt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let val = &self.0.to_f64().expect("Can't convert BigDecimal");
-        LowerExp::fmt(val, f)
-    }
-}
+// #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Enum, Display, EnumString)]
+// #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 
-#[derive(Clone)]
-pub struct CustomBigDecimal(BigDecimal);
 
-#[Scalar(name = "BigDecimal")]
-impl ScalarType for CustomBigDecimal {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        match value {
-            Value::String(s) => {
-                let parsed_value = BigDecimal::from_str(&s)?;
-                Ok(CustomBigDecimal(parsed_value))
-            }
-            _ => Err(InputValueError::expected_type(value)),
-        }
-    }
+// #[derive(Interface, Clone)]
+// #[graphql(
+//     field(name = "mean_radius", type = "&CustomBigDecimal"),
+//     field(name = "mass", type = "&CustomBigInt")
+// )]
+// pub enum Details {
+//     InhabitedPlanetDetails(InhabitedPlanetDetails),
+//     UninhabitedPlanetDetails(UninhabitedPlanetDetails),
+// }
 
-    fn to_value(&self) -> Value {
-        Value::String(self.0.to_string())
-    }
+// #[derive(SimpleObject, Clone)]
+// pub struct InhabitedPlanetDetails {
+//     mean_radius: CustomBigDecimal,
+//     mass: CustomBigInt,
+//     /// In billions
+//     population: CustomBigDecimal,
+// }
+
+// #[derive(SimpleObject, Clone)]
+// pub struct UninhabitedPlanetDetails {
+//     mean_radius: CustomBigDecimal,
+//     mass: CustomBigInt,
+// }
+
+// #[derive(Clone)]
+// pub struct CustomBigInt(BigDecimal);
+
+// #[Scalar(name = "BigInt")]
+// impl ScalarType for CustomBigInt {
+//     fn parse(value: Value) -> InputValueResult<Self> {
+//         match value {
+//             Value::String(s) => {
+//                 let parsed_value = BigDecimal::from_str(&s)?;
+//                 Ok(CustomBigInt(parsed_value))
+//             }
+//             _ => Err(InputValueError::expected_type(value)),
+//         }
+//     }
+
+//     fn to_value(&self) -> Value {
+//         Value::String(format!("{:e}", &self))
+//     }
+// }
+
+// impl LowerExp for CustomBigInt {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+//         let val = &self.0.to_f64().expect("Can't convert BigDecimal");
+//         LowerExp::fmt(val, f)
+//     }
+// }
+
+// #[derive(Clone)]
+// pub struct CustomBigDecimal(BigDecimal);
+
+// #[Scalar(name = "BigDecimal")]
+// impl ScalarType for CustomBigDecimal {
+//     fn parse(value: Value) -> InputValueResult<Self> {
+//         match value {
+//             Value::String(s) => {
+//                 let parsed_value = BigDecimal::from_str(&s)?;
+//                 Ok(CustomBigDecimal(parsed_value))
+//             }
+//             _ => Err(InputValueError::expected_type(value)),
+//         }
+//     }
+
+//     fn to_value(&self) -> Value {
+//         Value::String(self.0.to_string())
+//     }
+// }
+
+#[derive(InputObject)]
+struct EventInput {
+    summary: String,
+    description: String,
+    // type_: PlanetType,
+    // details: DetailsInput,
 }
 
 #[derive(InputObject)]
-struct PlanetInput {
-    name: String,
-    #[graphql(name = "type")]
-    type_: PlanetType,
-    details: DetailsInput,
+struct AttendesInput {
+    pub email: String,
 }
 
 #[derive(InputObject)]
-struct DetailsInput {
-    /// In kilometers
-    mean_radius: CustomBigDecimal,
-    /// In kilograms. A number should be represented as, for example, `6.42e+23`
-    mass: CustomBigInt,
-    /// In billions
-    population: Option<CustomBigDecimal>,
+struct EndlInput {
+    pub datetime: NaiveDateTime,
+    pub timezone: String,
 }
 
-impl From<&PlanetEntity> for Planet {
-    fn from(entity: &PlanetEntity) -> Self {
-        Planet {
+#[derive(InputObject)]
+struct OverridesInput {
+    pub method: String,
+    pub minutes: i32,
+    pub idreminders: RemindersInput,
+}
+
+#[derive(InputObject)]
+struct RecurrenceInput {
+    pub rrule: String,    
+}
+
+#[derive(InputObject)]
+struct RemindersInput {
+    pub usedefault: bool,
+}
+
+#[derive(InputObject)]
+struct StartInput {
+    pub datetime: NaiveDateTime,
+    pub timezone: String,
+}
+
+impl From<&Events> for Event {
+    fn from(entity: &Events) -> Self {
+        Event {
             id: entity.id.into(),
-            name: entity.name.clone(),
-            type_: PlanetType::from_str(entity.type_.as_str())
-                .expect("Can't convert &str to PlanetType"),
+            summary: entity.summary.clone(),
+            description: entity.description.clone(),
         }
     }
 }
 
-impl From<&DetailsEntity> for Details {
-    fn from(entity: &DetailsEntity) -> Self {
-        if entity.population.is_some() {
-            InhabitedPlanetDetails {
-                mean_radius: CustomBigDecimal(entity.mean_radius.clone()),
-                mass: CustomBigInt(entity.mass.clone()),
-                population: CustomBigDecimal(
-                    entity
-                        .population
-                        .as_ref()
-                        .expect("Can't get population")
-                        .clone(),
-                ),
-            }
-            .into()
-        } else {
-            UninhabitedPlanetDetails {
-                mean_radius: CustomBigDecimal(entity.mean_radius.clone()),
-                mass: CustomBigInt(entity.mass.clone()),
-            }
-            .into()
+impl From<&Attende> for Attendes {
+    fn from(entity: &Attende) -> Self {
+        Attendes {
+            email: string,
         }
     }
 }
 
-pub struct DetailsLoader {
+pub struct AttendesLoader {
     pub pool: Arc<PgPool>,
 }
 
 #[async_trait::async_trait]
-impl Loader<i32> for DetailsLoader {
-    type Value = Details;
+impl Loader<i32> for AttendesLoader {
+    type Value = Attendes;
     type Error = Error;
 
     async fn load(&self, keys: &[i32]) -> Result<HashMap<i32, Self::Value>, Self::Error> {
         let mut conn = self.pool.get()?;
-        let details = repository::get_details(keys, &mut conn)?;
+        let attendes = repository::get_attendes(keys, &mut conn)?;
 
-        Ok(details
+        Ok(attendes
             .iter()
-            .map(|details_entity| (details_entity.planet_id, Details::from(details_entity)))
+            .map(|attendes_entity| (attendes_entity.idevent, Attendes::from(attendes_entity)))
             .collect::<HashMap<_, _>>())
     }
 }
 
-struct RoleGuard {
-    role: Role,
-}
+// struct RoleGuard {
+//     role: Role,
+// }
 
-impl RoleGuard {
-    fn new(role: Role) -> Self {
-        Self { role }
-    }
-}
+// impl RoleGuard {
+//     fn new(role: Role) -> Self {
+//         Self { role }
+//     }
+// }
 
-#[async_trait::async_trait]
-impl Guard for RoleGuard {
-    async fn check(&self, ctx: &Context<'_>) -> Result<()> {
-        // TODO: auth disabling is needed for tests. try to reimplement when https://github.com/rust-lang/rust/issues/45599 will be resolved (using cfg(test))
-        if let Ok(boolean) = env::var("DISABLE_AUTH") {
-            let disable_auth = bool::from_str(boolean.as_str()).expect("Can't parse bool");
-            if disable_auth {
-                return Ok(());
-            }
-        };
+// #[async_trait::async_trait]
+// impl Guard for RoleGuard {
+//     async fn check(&self, ctx: &Context<'_>) -> Result<()> {
+//         // TODO: auth disabling is needed for tests. try to reimplement when https://github.com/rust-lang/rust/issues/45599 will be resolved (using cfg(test))
+//         if let Ok(boolean) = env::var("DISABLE_AUTH") {
+//             let disable_auth = bool::from_str(boolean.as_str()).expect("Can't parse bool");
+//             if disable_auth {
+//                 return Ok(());
+//             }
+//         };
 
-        let maybe_getting_role_result = ctx.data_opt::<Result<Option<Role>, CustomError>>();
-        match maybe_getting_role_result {
-            Some(getting_role_result) => {
-                let check_role_result =
-                    common_utils::check_user_role_is_allowed(getting_role_result, &self.role);
-                match check_role_result {
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(Error::new(e.message)),
-                }
-            }
-            None => Err(FORBIDDEN_MESSAGE.into()),
-        }
-    }
-}
+//         let maybe_getting_role_result = ctx.data_opt::<Result<Option<Role>, CustomError>>();
+//         match maybe_getting_role_result {
+//             Some(getting_role_result) => {
+//                 let check_role_result =
+//                     common_utils::check_user_role_is_allowed(getting_role_result, &self.role);
+//                 match check_role_result {
+//                     Ok(_) => Ok(()),
+//                     Err(e) => Err(Error::new(e.message)),
+//                 }
+//             }
+//             None => Err(FORBIDDEN_MESSAGE.into()),
+//         }
+//     }
+// }

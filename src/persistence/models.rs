@@ -23,7 +23,7 @@ pub struct Endl {
 }
 
 #[derive(Queryable, Debug)]
-pub struct Event {
+pub struct Events {
     pub id: i32,
     pub summary: String,
     pub location: String,
