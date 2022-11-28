@@ -7,13 +7,11 @@ use std::sync::{Arc, Mutex};
 
 use async_graphql::dataloader::{DataLoader, Loader};
 use async_graphql::*;
-use bigdecimal::{BigDecimal, ToPrimitive};
 use futures::{Stream, StreamExt};
 use rdkafka::{producer::FutureProducer, Message};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-use common_utils::{CustomError, Role, FORBIDDEN_MESSAGE};
 
 use crate::get_conn_from_ctx;
 use crate::kafka;

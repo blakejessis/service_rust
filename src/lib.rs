@@ -7,9 +7,9 @@ use async_graphql::{Context, Schema};
 use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::PgConnection;
-use diesel_migrations::MigrationName;
+use diesel_migrations::MigrationHarness;
 
-use crate::graphql::{AppSchema, DetailsLoader, Mutation, Query, Subscription};
+use crate::graphql::{AppSchema, AttendesLoader, Mutation, Query, Subscription};
 use crate::persistence::connection::PgPool;
 
 pub mod graphql;
@@ -17,7 +17,7 @@ mod kafka;
 pub mod persistence;
 
 const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    diesel_migrations::embed_migrations!("./migrations");;
+    diesel_migrations::embed_migrations!("./migrations");
 
 pub fn configure_service(cfg: &mut web::ServiceConfig) {
     cfg.service(
