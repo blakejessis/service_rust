@@ -11,7 +11,7 @@ diesel::table! {
 diesel::table! {
     endl (id) {
         id -> Int4,
-        dt -> Timestamp,
+        datetime -> Timestamp,
         timezone -> Varchar,
         idevent -> Nullable<Int4>,
     }
@@ -55,7 +55,7 @@ diesel::table! {
 diesel::table! {
     start (id) {
         id -> Int4,
-        dt -> Timestamp,
+        datetime -> Timestamp,
         timezone -> Varchar,
         idevent -> Nullable<Int4>,
     }

@@ -12,11 +12,11 @@ use crate::persistence::schema::{attendes, endl,
 pub fn get_all(conn: &mut PgConnection) -> QueryResult<Vec<Events>> {
     use crate::persistence::schema::event::dsl::*;
 
-    planets.load(conn)
+    event.load(conn)
 }
 
 pub fn get(id: i32, conn: &mut PgConnection) -> QueryResult<Events> {
-    planets::table.find(id).get_result(conn)
+    event::table.find(id).get_result(conn)
 }
 
 pub fn get_attendes(event_ids: &[i32], conn: &mut PgConnection) -> QueryResult<Vec<Attende>> {
@@ -38,7 +38,7 @@ pub fn get_overrides(event_ids: &[i32], conn: &mut PgConnection) -> QueryResult<
 }
 
 pub fn get_recurrence(event_ids: &[i32], conn: &mut PgConnection) -> QueryResult<Vec<Recurrence>> {
-    reccurence::table
+    recurrence::table
         .filter(recurrence::idevent.eq_any(event_ids))
         .load::<Recurrence>(conn)
 }
@@ -68,7 +68,7 @@ pub fn create(
     conn: &mut PgConnection,
 ) -> QueryResult<Events> {
     use crate::persistence::schema::{endl::dsl::*, event::dsl::*, attendes::dsl::*,
-        overrides::dsl::*, recurrence::dsl::*, reminder::dsl::*, start::dsl::*};
+        overrides::dsl::*, recurrence::dsl::*, reminders::dsl::*, start::dsl::*};
 
     let created_event: Events = diesel::insert_into(event)
         .values(new_event)

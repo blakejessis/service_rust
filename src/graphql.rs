@@ -11,6 +11,7 @@ use futures::{Stream, StreamExt};
 use rdkafka::{producer::FutureProducer, Message};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
+use chrono::{NaiveDateTime, NaiveDate};
 
 
 use crate::get_conn_from_ctx;
@@ -62,12 +63,11 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
-    #[graphql(guard = "RoleGuard::new(Role::Admin)")]
     async fn create_event(&self, ctx: &Context<'_>, event: EventInput) -> Result<Event> {
         let new_event = NewEvent {
             summary: event.summary,
             location: event.location,
-            description: event.description,
+            description: Some(event.description),
         };
 
         let attendes = event.attendes;
@@ -78,7 +78,7 @@ impl Mutation {
 
         let endl = event.endl;
         let new_event_endl = NewEndl {
-            datetime: endl.datetime.to_string(),
+            dt: endl.datetime.to_string(),
             timezone: endl.timezone.to_string(),
             idevent: 0,
         };
@@ -105,7 +105,7 @@ impl Mutation {
 
         let start = event.start;
         let new_event_start = NewStart {
-            datetime: start.datetime.to_string(),
+            dt: start.dt.to_string(),
             timezone: start.timezone.to_string(),
             idevent: 0,
         };
@@ -195,70 +195,70 @@ impl Event {
         attendes.ok_or_else(|| "Not found".into())
     }
 
-    async fn endl(&self, ctx: &Context<'_>) -> Result<Endl> {
-        let data_loader = ctx
-            .data::<DataLoader<EndlLoader>>()
-            .expect("Can't get data loader");
-        let idevent = self
-            .id
-            .to_string()
-            .parse::<i32>()
-            .expect("Can't convert id");
-        let endl = data_loader.load_one(idevent).await?;
-        endl.ok_or_else(|| "Not found".into())
-    }
+    // async fn endl(&self, ctx: &Context<'_>) -> Result<Endl> {
+    //     let data_loader = ctx
+    //         .data::<DataLoader<EndlLoader>>()
+    //         .expect("Can't get data loader");
+    //     let idevent = self
+    //         .id
+    //         .to_string()
+    //         .parse::<i32>()
+    //         .expect("Can't convert id");
+    //     let endl = data_loader.load_one(idevent).await?;
+    //     endl.ok_or_else(|| "Not found".into())
+    // }
 
-    async fn overrides(&self, ctx: &Context<'_>) -> Result<Override> {
-        let data_loader = ctx
-            .data::<DataLoader<OverrideLoader>>()
-            .expect("Can't get data loader");
-        let idevent = self
-            .id
-            .to_string()
-            .parse::<i32>()
-            .expect("Can't convert id");
-        let overrides = data_loader.load_one(idevent).await?;
-        overrides.ok_or_else(|| "Not found".into())
-    }
+    // async fn overrides(&self, ctx: &Context<'_>) -> Result<Override> {
+    //     let data_loader = ctx
+    //         .data::<DataLoader<OverrideLoader>>()
+    //         .expect("Can't get data loader");
+    //     let idevent = self
+    //         .id
+    //         .to_string()
+    //         .parse::<i32>()
+    //         .expect("Can't convert id");
+    //     let overrides = data_loader.load_one(idevent).await?;
+    //     overrides.ok_or_else(|| "Not found".into())
+    // }
 
-    async fn recurrence(&self, ctx: &Context<'_>) -> Result<Recurrence> {
-        let data_loader = ctx
-            .data::<DataLoader<RecurrenceLoader>>()
-            .expect("Can't get data loader");
-        let idevent = self
-            .id
-            .to_string()
-            .parse::<i32>()
-            .expect("Can't convert id");
-        let recurrence = data_loader.load_one(idevent).await?;
-        recurrence.ok_or_else(|| "Not found".into())
-    }
+    // async fn recurrence(&self, ctx: &Context<'_>) -> Result<Recurrence> {
+    //     let data_loader = ctx
+    //         .data::<DataLoader<RecurrenceLoader>>()
+    //         .expect("Can't get data loader");
+    //     let idevent = self
+    //         .id
+    //         .to_string()
+    //         .parse::<i32>()
+    //         .expect("Can't convert id");
+    //     let recurrence = data_loader.load_one(idevent).await?;
+    //     recurrence.ok_or_else(|| "Not found".into())
+    // }
 
-    async fn reminders(&self, ctx: &Context<'_>) -> Result<Reminder> {
-        let data_loader = ctx
-            .data::<DataLoader<ReminderLoader>>()
-            .expect("Can't get data loader");
-        let idevent = self
-            .id
-            .to_string()
-            .parse::<i32>()
-            .expect("Can't convert id");
-        let reminders = data_loader.load_one(idevent).await?;
-        reminders.ok_or_else(|| "Not found".into())
-    }
+    // async fn reminders(&self, ctx: &Context<'_>) -> Result<Reminder> {
+    //     let data_loader = ctx
+    //         .data::<DataLoader<ReminderLoader>>()
+    //         .expect("Can't get data loader");
+    //     let idevent = self
+    //         .id
+    //         .to_string()
+    //         .parse::<i32>()
+    //         .expect("Can't convert id");
+    //     let reminders = data_loader.load_one(idevent).await?;
+    //     reminders.ok_or_else(|| "Not found".into())
+    // }
 
-    async fn start(&self, ctx: &Context<'_>) -> Result<Start> {
-        let data_loader = ctx
-            .data::<DataLoader<StartLoader>>()
-            .expect("Can't get data loader");
-        let idevent = self
-            .id
-            .to_string()
-            .parse::<i32>()
-            .expect("Can't convert id");
-        let start = data_loader.load_one(idevent).await?;
-        start.ok_or_else(|| "Not found".into())
-    }
+    // async fn start(&self, ctx: &Context<'_>) -> Result<Start> {
+    //     let data_loader = ctx
+    //         .data::<DataLoader<StartLoader>>()
+    //         .expect("Can't get data loader");
+    //     let idevent = self
+    //         .id
+    //         .to_string()
+    //         .parse::<i32>()
+    //         .expect("Can't convert id");
+    //     let start = data_loader.load_one(idevent).await?;
+    //     start.ok_or_else(|| "Not found".into())
+    // }
     
 }
 
@@ -352,7 +352,7 @@ struct AttendesInput {
 
 #[derive(InputObject)]
 struct EndlInput {
-    pub datetime: NaiveDateTime,
+    pub dt: NaiveDateTime,
     pub timezone: String,
 }
 
@@ -375,7 +375,7 @@ struct RemindersInput {
 
 #[derive(InputObject)]
 struct StartInput {
-    pub datetime: NaiveDateTime,
+    pub dt: NaiveDateTime,
     pub timezone: String,
 }
 
@@ -389,9 +389,9 @@ impl From<&Events> for Event {
     }
 }
 
-impl From<&Attende> for Attendes {
+impl From<&Attende> for Attende {
     fn from(entity: &Attende) -> Self {
-        Attendes {
+        Attende {
             email: string,
         }
     }
@@ -403,7 +403,7 @@ pub struct AttendesLoader {
 
 #[async_trait::async_trait]
 impl Loader<i32> for AttendesLoader {
-    type Value = Attendes;
+    type Value = Attende;
     type Error = Error;
 
     async fn load(&self, keys: &[i32]) -> Result<HashMap<i32, Self::Value>, Self::Error> {

@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 
 use actix_web::{guard, web, HttpRequest, HttpResponse, Result};
 use async_graphql::dataloader::DataLoader;
@@ -37,9 +37,7 @@ async fn index(
     http_req: HttpRequest,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    let mut query = req.into_inner();
-    let getting_role_result = common_utils::get_role(http_req);
-    query = query.data(getting_role_result);
+    let query = req.into_inner();
     schema.execute(query).await.into()
 }
 
@@ -62,19 +60,19 @@ async fn index_playground() -> HttpResponse {
 pub fn create_schema_with_context(pool: PgPool) -> Schema<Query, Mutation, Subscription> {
     let arc_pool = Arc::new(pool);
     let cloned_pool = Arc::clone(&arc_pool);
-    let details_data_loader =
-        DataLoader::new(DetailsLoader { pool: cloned_pool }, actix_rt::spawn).max_batch_size(10);
-
-    let kafka_consumer_counter = Mutex::new(0);
+    let attendes_data_loader =
+        DataLoader::new(AttendesLoader { pool: cloned_pool }, actix_rt::spawn).max_batch_size(10);
+    
+    // let kafka_consumer_counter = Mutex::new(0);
 
     Schema::build(Query, Mutation, Subscription)
         // limits are commented out, because otherwise introspection query won't work
         // .limit_depth(3)
         // .limit_complexity(15)
         .data(arc_pool)
-        .data(details_data_loader)
-        .data(kafka::create_producer())
-        .data(kafka_consumer_counter)
+        .data(attendes_data_loader)
+        // .data(kafka::create_producer())
+        // .data(kafka_consumer_counter)
         .enable_subscription_in_federation()
         .finish()
 }

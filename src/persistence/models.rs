@@ -3,8 +3,13 @@
 #![allow(unused)]
 #![allow(clippy::all)]
 
-use diesel::sql_types::{Float8, Array, Int4};
+use diesel::prelude::*;
+use diesel::Queryable;
+use diesel::Insertable;
+use diesel::Expression;
+use diesel::sql_types::{Float8, Array, Int4, Timestamp};
 use chrono::{NaiveDateTime, NaiveDate};
+use crate::persistence::schema::{attendes, endl, event, recurrence, reminders, overrides, start};
 
 
 #[derive(Queryable, Debug)]
@@ -17,7 +22,7 @@ pub struct Attende {
 #[derive(Queryable, Debug)]
 pub struct Endl {
     pub id: i32,
-    pub datetime: NaiveDateTime,
+    pub dt: NaiveDateTime,
     pub timezone: String,
     pub idevent: Option<i32>,
 }
@@ -56,7 +61,7 @@ pub struct Reminder {
 #[derive(Queryable, Debug)]
 pub struct Start {
     pub id: i32,
-    pub datetime: NaiveDateTime,
+    pub dt: NaiveDateTime,
     pub timezone: String,
     pub idevent: Option<i32>,
 }
@@ -80,7 +85,7 @@ pub struct NewAttende {
 #[derive(Insertable)]
 #[diesel(table_name = endl)]
 pub struct NewEndl {
-    pub datetime: NaiveDateTime,
+    pub dt: NaiveDateTime,
     pub timezone: String,
     pub idevent: Option<i32>,
 }
@@ -95,7 +100,7 @@ pub struct NewOverride {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = reccurence)]
+#[diesel(table_name = recurrence)]
 pub struct NewRecurrence {
     pub rrule: String,
     pub idevent: Option<i32>,
@@ -111,7 +116,7 @@ pub struct NewReminder {
 #[derive(Insertable)]
 #[diesel(table_name = start)]
 pub struct NewStart {
-    pub datetime: NaiveDateTime,
+    pub dt: NaiveDateTime,
     pub timezone: String,
     pub idevent: Option<i32>,
 }
